@@ -59,6 +59,26 @@ def _request(url: str, token: str | None = None, *, post: bool = False) -> bytes
         return response.read()
 
 
+def _terminate_failed_start(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is not None:
+        return
+    try:
+        process.terminate()
+    except OSError:
+        pass
+    try:
+        process.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=2)
+
+
+def _remove_state_for_process(pid: int) -> None:
+    state = _read(WEB_STATE_FILE)
+    if state and state.get("pid") == pid:
+        WEB_STATE_FILE.unlink(missing_ok=True)
+
+
 def is_running() -> bool:
     state = _read(WEB_STATE_FILE)
     if not state:
@@ -117,17 +137,22 @@ def start() -> dict[str, object]:
         "control_token": control_token,
         "log": str(log_path),
     }
-    _write(state)
-    for _ in range(100):
-        if process.poll() is not None:
-            raise RuntimeError(f"PCWEB s'est arrêté au démarrage. Consultez {log_path}.")
-        try:
-            payload = json.loads(_request(f"{url}/health"))
-            if payload.get("component") == "pcweb":
-                return state
-        except (OSError, urllib.error.URLError, ValueError):
-            time.sleep(0.1)
-    raise RuntimeError(f"PCWEB ne répond pas après 10 secondes. Consultez {log_path}.")
+    try:
+        _write(state)
+        for _ in range(100):
+            if process.poll() is not None:
+                raise RuntimeError(f"PCWEB s'est arrêté au démarrage. Consultez {log_path}.")
+            try:
+                payload = json.loads(_request(f"{url}/health"))
+                if payload.get("component") == "pcweb":
+                    return state
+            except (OSError, urllib.error.URLError, ValueError):
+                time.sleep(0.1)
+        raise RuntimeError(f"PCWEB ne répond pas après 10 secondes. Consultez {log_path}.")
+    except BaseException:
+        _terminate_failed_start(process)
+        _remove_state_for_process(process.pid)
+        raise
 
 
 def stop() -> bool:
