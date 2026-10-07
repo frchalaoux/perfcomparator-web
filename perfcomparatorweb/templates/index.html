@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PerfComparator</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+  </head>
+  <body>
+    <main>
+      <h1>PerfComparator</h1>
+      <p>Interface locale de comparaison des performances.</p>
+      <section aria-labelledby="services-title">
+        <h2 id="services-title">État des services</h2>
+        <dl>
+          <dt>Interface Web</dt><dd>{{ status.web }}</dd>
+          <dt>Moteur PCE</dt><dd>{{ status.engine }}</dd>
+        </dl>
+        {% if status.detail %}<p role="status">{{ status.detail }}</p>{% endif %}
+      </section>
+    </main>
+  </body>
+</html>
