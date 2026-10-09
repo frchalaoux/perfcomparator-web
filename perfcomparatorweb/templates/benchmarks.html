@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Benchmarks · PerfComparator{% endblock %}
+{% block content %}
+  <h1>Catalogue des benchmarks</h1>
+  <p class="lead">Protocoles et profils disponibles dans le moteur local.</p>
+  <section aria-labelledby="profiles-title">
+    <h2 id="profiles-title">Profils</h2>
+    <div class="cards">
+      {% for profile in catalog.profiles %}
+        <article class="card">
+          <h3>{{ profile.profile_id }}</h3>
+          <p>{{ profile.duration_seconds }} s par mesure</p>
+          <p>Mémoire : {{ (profile.memory_size_bytes / 1048576)|int }} Mio · stockage : {{ (profile.disk_size_bytes / 1048576)|int }} Mio</p>
+          <p>Lectures/écritures aléatoires : {{ profile.random_operations }} · lignes SQLite : {{ profile.sqlite_rows }}</p>
+        </article>
+      {% endfor %}
+    </div>
+  </section>
+  <section aria-labelledby="catalog-title">
+    <h2 id="catalog-title">Benchmarks</h2>
+    {% for group in catalog.groups if group.group_id != "all" %}
+      <h3>{{ group.group_id|capitalize }}</h3>
+      <ul class="item-list">
+        {% for benchmark in catalog.benchmarks if benchmark.benchmark_id in group.benchmark_ids %}
+          <li>
+            <a href="/benchmarks/{{ benchmark.benchmark_id }}"><strong>{{ benchmark.name }}</strong></a>
+            <span class="muted">{{ benchmark.benchmark_id }} · {{ benchmark.description }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endfor %}
+  </section>
+{% endblock %}

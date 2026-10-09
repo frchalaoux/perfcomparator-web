@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{{ benchmark.name }} · PerfComparator{% endblock %}
+{% block content %}
+  <p><a href="/benchmarks">← Catalogue des benchmarks</a></p>
+  <h1>{{ benchmark.name }}</h1>
+  <p class="lead">{{ benchmark.description }} · Groupe {{ benchmark.group }}</p>
+  <section>
+    <h2>Méthode</h2>
+    <p>{{ benchmark.methodology }}</p>
+    <p><strong>Unité du score :</strong> {{ benchmark.unit }}</p>
+  </section>
+  <section>
+    <h2>Limites</h2>
+    <p>{{ benchmark.limitations }}</p>
+  </section>
+  <section>
+    <h2>Références</h2>
+    <ul class="item-list">{% for reference in benchmark.references %}<li>{{ reference }}</li>{% endfor %}</ul>
+  </section>
+{% endblock %}

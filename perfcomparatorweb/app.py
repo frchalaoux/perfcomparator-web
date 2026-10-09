@@ -16,6 +16,7 @@ from perfcomparatorweb import __version__
 from perfcomparatorweb.core.config import Settings
 from perfcomparatorweb.http_client.pce_client import PCEClient
 from perfcomparatorweb.web.repositories.pce_repository import PCERepository
+from perfcomparatorweb.web.services.read_only_service import ReadOnlyService
 from perfcomparatorweb.web.services.status_service import StatusService
 from perfcomparatorweb.webapps.base import router
 
@@ -29,7 +30,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         client = PCEClient(resolved.engine_url, resolved.engine_token)
         app.state.pce_client = client
-        app.state.status_service = StatusService(PCERepository(client))
+        pce_repository = PCERepository(client)
+        app.state.status_service = StatusService(pce_repository)
+        app.state.read_only_service = ReadOnlyService(pce_repository)
         try:
             yield
         finally:

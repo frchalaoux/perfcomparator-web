@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Rapport · PerfComparator{% endblock %}
+{% block content %}
+  <p><a href="/reports">← Historique des rapports</a></p>
+  <h1>{{ report.label or report.machine }}</h1>
+  <p class="lead">{{ report.recorded_at }} · Profil {{ report.profile }} · {{ report.repetitions }} passage(s)</p>
+  <p class="muted">PerfComparator {{ report.suite_version }}{% if report.protocol_version %} · Protocole {{ report.protocol_version }}{% endif %}</p>
+  <section>
+    <h2>Benchmarks demandés</h2>
+    <ul class="item-list">{% for benchmark_id in report.requested_benchmarks %}<li>{{ benchmark_id }}</li>{% endfor %}</ul>
+  </section>
+  <section>
+    <h2>Machine</h2>
+    <dl class="details-grid">
+      <dt>Système</dt><dd>{{ report.system.system }} {{ report.system.release }} · {{ report.system.machine }}</dd>
+      <dt>Modèle</dt><dd>{{ report.system.product_name or report.system.model }}</dd>
+      <dt>Processeur</dt><dd>{{ report.system.processor }}</dd>
+      <dt>Cœurs</dt><dd>{{ report.system.physical_cpu_count or "Inconnu" }} physiques · {{ report.system.logical_cpu_count }} logiques</dd>
+      <dt>Mémoire</dt><dd>{% if report.system.memory_bytes %}{{ "%.1f"|format(report.system.memory_bytes / 1073741824) }} Gio{% else %}Inconnue{% endif %}</dd>
+    </dl>
+  </section>
+  {% if report.environment_warnings %}
+    <section><h2>Avertissements</h2><ul class="notice-list">{% for warning in report.environment_warnings %}<li>{{ warning }}</li>{% endfor %}</ul></section>
+  {% endif %}
+  <section>
+    <h2>Résultats</h2>
+    {% if report.results %}
+      <div class="table-wrap"><table>
+        <thead><tr><th>Benchmark</th><th>Score médian</th><th>Passages</th><th>Dispersion</th></tr></thead>
+        <tbody>
+          {% for result in report.results %}
+            <tr>
+              <td>{{ result.name }} <span class="muted">({{ result.benchmark_id }})</span></td>
+              <td>{{ "%.3f"|format(result.value) }} {{ result.unit }}</td>
+              <td>{% for value in result.sample_values %}{{ "%.3f"|format(value) }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+              <td>{% if result.relative_spread_percent is not none %}{{ "%.1f"|format(result.relative_spread_percent) }} %{% else %}—{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table></div>
+    {% else %}<p>Aucun benchmark réussi dans ce rapport.</p>{% endif %}
+  </section>
+  {% if report.failures %}
+    <section><h2>Échecs</h2><ul class="item-list">{% for failure in report.failures %}<li>{{ failure.benchmark_id }} : {{ failure.message }}</li>{% endfor %}</ul></section>
+  {% endif %}
+{% endblock %}
