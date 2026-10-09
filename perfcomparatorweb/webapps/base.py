@@ -36,6 +36,17 @@ def _error_page(request: Request, error: httpx.HTTPError) -> HTMLResponse:
 async def home(request: Request) -> HTMLResponse:
     try:
         inventory = await request.app.state.read_only_service.system()
+    except httpx.RequestError:
+        status = {
+            "web": "available",
+            "engine": "unavailable",
+            "detail": "PCE est indisponible. Vérifiez que le moteur est démarré, puis réessayez.",
+        }
+        return request.app.state.templates.TemplateResponse(
+            request,
+            "index.html",
+            {"inventory": None, "status": status},
+        )
     except httpx.HTTPError as error:
         return _error_page(request, error)
     return request.app.state.templates.TemplateResponse(

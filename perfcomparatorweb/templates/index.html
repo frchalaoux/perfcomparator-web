@@ -1,34 +1,47 @@
 {% extends "base.html" %}
 {% block title %}Machine · PerfComparator{% endblock %}
 {% block content %}
-  <h1>Machine analysée</h1>
-  <p class="lead">Informations locales et capacités détectées par PCE.</p>
-  <section aria-labelledby="machine-title">
-    <h2 id="machine-title">Système</h2>
-    <dl class="details-grid">
-      <dt>Modèle</dt><dd>{{ inventory.system.product_name or inventory.system.model }}</dd>
-      <dt>Fabricant</dt><dd>{{ inventory.system.manufacturer or "Inconnu" }}</dd>
-      <dt>Système</dt><dd>{{ inventory.system.system }} {{ inventory.system.release }} · {{ inventory.system.machine }}</dd>
-      <dt>Processeur</dt><dd>{{ inventory.system.processor }}</dd>
-      <dt>Cœurs</dt><dd>{{ inventory.system.physical_cpu_count or "Inconnu" }} physiques · {{ inventory.system.logical_cpu_count }} logiques</dd>
-      <dt>Mémoire</dt><dd>{% if inventory.system.memory_bytes %}{{ "%.1f"|format(inventory.system.memory_bytes / 1073741824) }} Gio{% else %}Inconnue{% endif %}</dd>
-      <dt>Python</dt><dd>{{ inventory.system.python_implementation }} {{ inventory.system.python_version }}</dd>
-    </dl>
-  </section>
-  <section aria-labelledby="gpu-title">
-    <h2 id="gpu-title">Adaptateurs WebGPU</h2>
-    {% if inventory.gpu_adapters %}
-      <ul class="item-list">
-        {% for adapter in inventory.gpu_adapters %}
-          <li><strong>{{ adapter.device }}</strong> · {{ adapter.adapter_type }} · {{ adapter.backend }}</li>
-        {% endfor %}
-      </ul>
-    {% else %}
-      <p>Aucun adaptateur WebGPU compatible n’a été détecté.</p>
-    {% endif %}
-    {% if inventory.warnings %}
-      <ul class="notice-list">{% for warning in inventory.warnings %}<li>{{ warning }}</li>{% endfor %}</ul>
-    {% endif %}
-  </section>
-  <p class="notice">Cette version de l’interface consulte les informations sans lancer de mesure.</p>
+  {% if status %}
+    <h1>État des services</h1>
+    <section aria-labelledby="services-title">
+      <h2 id="services-title">Disponibilité</h2>
+      <dl class="details-grid">
+        <dt>Interface Web</dt><dd>{{ status.web }}</dd>
+        <dt>Moteur PCE</dt><dd>{{ status.engine }}</dd>
+      </dl>
+      <p role="status">{{ status.detail }}</p>
+      <p><a href="/">Réessayer</a></p>
+    </section>
+  {% else %}
+    <h1>Machine analysée</h1>
+    <p class="lead">Informations locales et capacités détectées par PCE.</p>
+    <section aria-labelledby="machine-title">
+      <h2 id="machine-title">Système</h2>
+      <dl class="details-grid">
+        <dt>Modèle</dt><dd>{{ inventory.system.product_name or inventory.system.model }}</dd>
+        <dt>Fabricant</dt><dd>{{ inventory.system.manufacturer or "Inconnu" }}</dd>
+        <dt>Système</dt><dd>{{ inventory.system.system }} {{ inventory.system.release }} · {{ inventory.system.machine }}</dd>
+        <dt>Processeur</dt><dd>{{ inventory.system.processor }}</dd>
+        <dt>Cœurs</dt><dd>{{ inventory.system.physical_cpu_count or "Inconnu" }} physiques · {{ inventory.system.logical_cpu_count }} logiques</dd>
+        <dt>Mémoire</dt><dd>{% if inventory.system.memory_bytes %}{{ "%.1f"|format(inventory.system.memory_bytes / 1073741824) }} Gio{% else %}Inconnue{% endif %}</dd>
+        <dt>Python</dt><dd>{{ inventory.system.python_implementation }} {{ inventory.system.python_version }}</dd>
+      </dl>
+    </section>
+    <section aria-labelledby="gpu-title">
+      <h2 id="gpu-title">Adaptateurs WebGPU</h2>
+      {% if inventory.gpu_adapters %}
+        <ul class="item-list">
+          {% for adapter in inventory.gpu_adapters %}
+            <li><strong>{{ adapter.device }}</strong> · {{ adapter.adapter_type }} · {{ adapter.backend }}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p>Aucun adaptateur WebGPU compatible n’a été détecté.</p>
+      {% endif %}
+      {% if inventory.warnings %}
+        <ul class="notice-list">{% for warning in inventory.warnings %}<li>{{ warning }}</li>{% endfor %}</ul>
+      {% endif %}
+    </section>
+    <p class="notice">Cette version de l’interface consulte les informations sans lancer de mesure.</p>
+  {% endif %}
 {% endblock %}
