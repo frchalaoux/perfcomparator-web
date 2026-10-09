@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Service indisponible · PerfComparator{% endblock %}
+{% block content %}
+  <h1>{% if status_code == 404 %}Élément introuvable{% elif status_code == 502 %}Réponse incompatible{% else %}Moteur indisponible{% endif %}</h1>
+  <section role="status">
+    <p>{{ message }}</p>
+    <p><a href="/">Réessayer</a></p>
+  </section>
+{% endblock %}

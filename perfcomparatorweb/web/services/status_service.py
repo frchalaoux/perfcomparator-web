@@ -12,6 +12,10 @@ class StatusService:
     async def get_status(self) -> dict[str, object]:
         try:
             engine = await self._pce.health()
-        except httpx.HTTPError as error:
-            return {"web": "available", "engine": "unavailable", "detail": str(error)}
+        except httpx.HTTPError:
+            return {
+                "web": "available",
+                "engine": "unavailable",
+                "detail": "PCE est indisponible. Vérifiez que le moteur est démarré.",
+            }
         return {"web": "available", "engine": engine.get("status", "unknown")}
