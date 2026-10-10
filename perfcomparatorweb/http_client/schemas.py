@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SystemResponse(BaseModel):
@@ -145,3 +145,51 @@ class HealthResponse(BaseModel):
     status: str
     component: str
     api_version: str
+
+
+class CampaignRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profile: str = Field(min_length=1, max_length=32)
+    benchmark_ids: list[str] = Field(min_length=1, max_length=100)
+    repetitions: int = Field(ge=1, le=9)
+    label: str | None = Field(default=None, max_length=120)
+
+
+class ReadinessProcess(BaseModel):
+    name: str
+    cpu_percent: float
+    memory_percent: float
+
+
+class CampaignReadiness(BaseModel):
+    sample_seconds: float
+    cpu_percent: float
+    memory_available_percent: float
+    memory_available_bytes: int
+    swap_percent: float
+    active_processes: list[ReadinessProcess]
+    warnings: list[str]
+    suitable: bool
+
+
+class CampaignTaskSummary(BaseModel):
+    task_id: str
+    status: str
+    created_at: datetime
+    completed_benchmarks: int
+    total_benchmarks: int
+    report_id: str | None
+
+
+class CampaignTask(CampaignTaskSummary):
+    request: CampaignRequest
+    started_at: datetime | None
+    finished_at: datetime | None
+    current_benchmark: str | None
+    error_code: str | None
+
+
+class CampaignSubmission(BaseModel):
+    task: CampaignTask
+    created: bool
