@@ -25,6 +25,10 @@
       <input id="label" name="label" type="text" maxlength="120" autocomplete="off">
 
       <h3>Benchmarks</h3>
+      <label class="benchmark-choice benchmark-select-all" for="select-all-benchmarks">
+        <input id="select-all-benchmarks" type="checkbox">
+        <span><strong>Tous les benchmarks</strong><small>Sélectionner ou désélectionner toutes les mesures disponibles.</small></span>
+      </label>
       {% for group in catalog.groups if group.group_id != "all" %}
         <fieldset class="benchmark-group">
           <legend>{{ group.group_id }}</legend>
@@ -62,8 +66,16 @@
       const confirmButton = document.getElementById("confirm-campaign");
       const selectionError = document.getElementById("selection-error");
       const resultPanel = document.getElementById("campaign-result");
+      const selectAllBenchmarks = document.getElementById("select-all-benchmarks");
+      const benchmarkInputs = [...form.querySelectorAll('input[name="benchmark_ids"]')];
       let checkedCampaign = null;
       let idempotencyKey = crypto.randomUUID();
+
+      function updateSelectAllState() {
+        const selectedCount = benchmarkInputs.filter((input) => input.checked).length;
+        selectAllBenchmarks.checked = benchmarkInputs.length > 0 && selectedCount === benchmarkInputs.length;
+        selectAllBenchmarks.indeterminate = selectedCount > 0 && selectedCount < benchmarkInputs.length;
+      }
 
       function campaignRequest() {
         const data = new FormData(form);
@@ -265,6 +277,16 @@
         resultPanel.hidden = true;
       }
 
+      selectAllBenchmarks.addEventListener("change", () => {
+        benchmarkInputs.forEach((input) => {
+          input.checked = selectAllBenchmarks.checked;
+        });
+        updateSelectAllState();
+        invalidateReadiness();
+      });
+      benchmarkInputs.forEach((input) => {
+        input.addEventListener("change", updateSelectAllState);
+      });
       form.addEventListener("change", invalidateReadiness);
       acknowledge.addEventListener("change", () => {
         confirmButton.disabled = !acknowledge.checked || checkedCampaign === null;

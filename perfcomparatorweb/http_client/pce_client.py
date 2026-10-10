@@ -84,6 +84,21 @@ class PCEClient:
         path = f"/api/v1/reports/{quote(report_id, safe='')}"
         return await self._get(path, schemas.ReportDetail)
 
+    async def compare_reports(
+        self,
+        report_ids: list[str],
+        *,
+        reference_report_id: str,
+    ) -> dict[str, object]:
+        return await self._post(
+            "/api/v1/reports/compare",
+            schemas.ReportComparison,
+            payload={
+                "report_ids": report_ids,
+                "reference_report_id": reference_report_id,
+            },
+        )
+
     async def readiness(self) -> dict[str, object]:
         return await self._post("/api/v1/readiness", schemas.CampaignReadiness)
 

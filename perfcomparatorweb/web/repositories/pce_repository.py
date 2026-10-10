@@ -28,6 +28,17 @@ class PCERepository:
     async def report(self, report_id: str) -> dict[str, object]:
         return await self._client.report(report_id)
 
+    async def compare_reports(
+        self,
+        report_ids: list[str],
+        *,
+        reference_report_id: str,
+    ) -> dict[str, object]:
+        return await self._client.compare_reports(
+            report_ids,
+            reference_report_id=reference_report_id,
+        )
+
     async def readiness(self) -> dict[str, object]:
         return await self._client.readiness()
 

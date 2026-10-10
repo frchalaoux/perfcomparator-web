@@ -141,6 +141,41 @@ class ReportDetail(ReportSummary):
     failures: list[ReportFailure]
 
 
+class ComparisonMetric(BaseModel):
+    benchmark_id: str
+    name: str
+    group: str
+    value: float
+    unit: str
+    index: float
+    difference_percent: float
+    conclusion: str
+    uncertainty: str
+    spread_percent: float | None
+
+
+class ComparisonMachine(BaseModel):
+    report_id: str
+    label: str
+    recorded_at: datetime
+    profile: str
+    system: ReportSystem
+    overall_index: float
+    categories: dict[str, float]
+    scenarios: dict[str, float]
+    narrative: str
+    metrics: dict[str, ComparisonMetric]
+
+
+class ReportComparison(BaseModel):
+    baseline_report_id: str
+    baseline_label: str
+    common_benchmarks: list[str]
+    scenario_weights: dict[str, float]
+    warnings: list[str]
+    machines: list[ComparisonMachine]
+
+
 class HealthResponse(BaseModel):
     status: str
     component: str

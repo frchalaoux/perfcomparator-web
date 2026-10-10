@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Comparer des machines · PerfComparator{% endblock %}
+{% block content %}
+  <h1>Comparer des machines</h1>
+  <p class="lead">Sélectionnez de deux à huit rapports et choisissez celui qui servira de référence.</p>
+
+  {% if page.warnings %}<ul class="notice-list">{% for warning in page.warnings %}<li>{{ warning }}</li>{% endfor %}</ul>{% endif %}
+  {% if comparison_error %}<p class="notice" role="alert">{{ comparison_error }}</p>{% endif %}
+
+  {% if page.reports %}
+    <form method="get" action="/compare" id="comparison-selection">
+      <input type="hidden" name="offset" value="{{ page.offset }}">
+      <input type="hidden" name="limit" value="{{ page.limit }}">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Inclure</th><th>Référence</th><th>Date</th><th>Machine</th><th>Profil</th><th>Résultats</th></tr></thead>
+          <tbody>
+            {% for report in page.reports %}
+              <tr>
+                <td><input type="checkbox" name="report_id" value="{{ report.report_id }}" aria-label="Inclure {{ report.label or report.machine }}" {% if report.report_id in selected_ids %}checked{% endif %}></td>
+                <td><input type="radio" name="reference_report_id" value="{{ report.report_id }}" aria-label="Choisir {{ report.label or report.machine }} comme référence" {% if report.report_id == reference_report_id %}checked{% endif %}></td>
+                <td><a href="/reports/{{ report.report_id }}">{{ report.recorded_at }}</a></td>
+                <td>{{ report.label or report.machine }}</td>
+                <td>{{ report.profile }} · {{ report.repetitions }} passage(s)</td>
+                <td>{{ report.result_count }} réussi(s), {{ report.failure_count }} échec(s)</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p><button type="submit">Comparer la sélection</button></p>
+    </form>
+    <nav class="pagination" aria-label="Pages des rapports à comparer">
+      {% if page.offset > 0 %}<a href="/compare?offset={{ [page.offset - page.limit, 0]|max }}&amp;limit={{ page.limit }}">← Rapports plus récents</a>{% endif %}
+      {% if page.offset + page.limit < page.total %}<a href="/compare?offset={{ page.offset + page.limit }}&amp;limit={{ page.limit }}">Rapports plus anciens →</a>{% endif %}
+    </nav>
+    <p class="muted">{{ page.total }} rapport(s) disponibles. La sélection porte sur la page affichée.</p>
+  {% else %}
+    <section><h2>Aucun rapport</h2><p>Lancez une campagne sur chaque machine, puis ouvrez ici les rapports à comparer.</p></section>
+  {% endif %}
+
+  {% if comparison %}
+    <section aria-labelledby="comparison-summary-title">
+      <h2 id="comparison-summary-title">Résultat de la comparaison</h2>
+      <p class="lead">Référence : {{ comparison.baseline_label }} = 100</p>
+      <div class="comparison-machines">
+        {% for machine in comparison.machines %}
+          <article class="comparison-machine">
+            <h3>{{ machine.label }}{% if machine.report_id == comparison.baseline_report_id %} <span class="badge">Référence</span>{% endif %}</h3>
+            <p>{{ machine.system.product_name or machine.system.model }}</p>
+            <p class="muted">{{ machine.recorded_at }} · {{ machine.profile }} · {{ machine.system.system }} {{ machine.system.release }}</p>
+            <p class="comparison-index">Indice global : <strong>{{ "%.1f"|format(machine.overall_index) }}</strong></p>
+            <p>{{ machine.narrative }}</p>
+            <details><summary>Configuration matérielle</summary>
+              <dl class="details-grid">
+                <dt>Processeur</dt><dd>{{ machine.system.processor }}</dd>
+                <dt>Cœurs</dt><dd>{{ machine.system.physical_cpu_count or "Inconnu" }} physiques · {{ machine.system.logical_cpu_count }} logiques</dd>
+                <dt>Mémoire</dt><dd>{% if machine.system.memory_bytes %}{{ "%.1f"|format(machine.system.memory_bytes / 1073741824) }} Gio{% else %}Inconnue{% endif %}</dd>
+                <dt>GPU</dt><dd>{{ machine.system.gpu_devices|join(", ") or "Inconnu" }}</dd>
+              </dl>
+            </details>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+
+    {% if comparison.warnings %}
+      <section><h2>Précautions</h2><ul class="notice-list">{% for warning in comparison.warnings %}<li>{{ warning }}</li>{% endfor %}</ul></section>
+    {% endif %}
+
+    <section>
+      <h2>Résultats communs</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Benchmark</th>{% for machine in comparison.machines %}<th>{{ machine.label }}<br><span class="muted">indice · valeur</span></th>{% endfor %}</tr></thead>
+        <tbody>
+          {% for benchmark_id in comparison.common_benchmarks %}
+            <tr>
+              <th scope="row">{{ comparison.machines[0].metrics[benchmark_id].name }}<br><span class="muted">{{ benchmark_id }}</span></th>
+              {% for machine in comparison.machines %}
+                {% set metric = machine.metrics[benchmark_id] %}
+                <td><strong>{{ "%.1f"|format(metric.index) }}</strong> · {{ "%.3f"|format(metric.value) }} {{ metric.unit }}<br><span class="muted">{{ metric.difference_percent|round(1) }} % · {{ metric.conclusion }}</span></td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table></div>
+    </section>
+  {% endif %}
+
+  <script>
+    const selectionForm = document.querySelector("#comparison-selection");
+    if (selectionForm) {
+      const checkboxes = [...selectionForm.querySelectorAll('input[name="report_id"]')];
+      const references = [...selectionForm.querySelectorAll('input[name="reference_report_id"]')];
+      const selectReference = () => {
+        if (references.some((input) => input.checked && input.closest("tr").querySelector('input[name="report_id"]').checked)) return;
+        const firstSelected = checkboxes.find((input) => input.checked);
+        references.forEach((input) => { input.checked = firstSelected !== undefined && input.value === firstSelected.value; });
+      };
+      checkboxes.forEach((input) => input.addEventListener("change", () => {
+        if (input.checked && !references.some((reference) => reference.checked)) {
+          references.find((reference) => reference.value === input.value).checked = true;
+        } else if (!input.checked) {
+          selectReference();
+        }
+      }));
+      references.forEach((input) => input.addEventListener("change", () => {
+        checkboxes.find((checkbox) => checkbox.value === input.value).checked = true;
+      }));
+    }
+  </script>
+{% endblock %}

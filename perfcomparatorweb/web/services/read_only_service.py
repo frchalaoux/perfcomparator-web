@@ -21,3 +21,14 @@ class ReadOnlyService:
 
     async def report(self, report_id: str) -> dict[str, object]:
         return await self._pce.report(report_id)
+
+    async def compare_reports(
+        self,
+        report_ids: list[str],
+        *,
+        reference_report_id: str,
+    ) -> dict[str, object]:
+        return await self._pce.compare_reports(
+            report_ids,
+            reference_report_id=reference_report_id,
+        )

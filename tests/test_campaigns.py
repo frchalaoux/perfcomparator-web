@@ -116,6 +116,8 @@ def test_campaign_page_places_preflight_before_explicit_confirmation(monkeypatch
     assert "Conditions de mesure" in response.text
     assert "J’ai pris connaissance de ces conditions" in response.text
     assert "Confirmer et lancer la campagne" in response.text
+    assert 'id="select-all-benchmarks" type="checkbox"' in response.text
+    assert "benchmarkInputs.forEach((input) =>" in response.text
     assert 'fetch("/api/campaigns/readiness"' in response.text
     assert 'fetch("/api/campaigns"' in response.text
 

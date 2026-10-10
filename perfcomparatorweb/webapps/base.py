@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 import httpx
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
@@ -96,6 +98,68 @@ async def reports(
         request,
         "reports.html",
         {"page": page},
+    )
+
+
+@router.get("/compare", response_class=HTMLResponse, name="compare_reports")
+async def compare_reports(
+    request: Request,
+    report_id: Annotated[list[str] | None, Query()] = None,
+    reference_report_id: str | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=100),
+) -> HTMLResponse:
+    try:
+        page = await request.app.state.read_only_service.reports(offset=offset, limit=limit)
+    except httpx.HTTPError as error:
+        return _error_page(request, error)
+
+    comparison = None
+    comparison_error = None
+    request_report_ids = report_id or []
+    selected_ids = list(dict.fromkeys(request_report_ids))
+    if request_report_ids:
+        if len(selected_ids) < 2:
+            comparison_error = "Sélectionnez au moins deux rapports à comparer."
+        else:
+            reference = reference_report_id or selected_ids[0]
+            try:
+                comparison = await request.app.state.read_only_service.compare_reports(
+                    selected_ids,
+                    reference_report_id=reference,
+                )
+            except httpx.HTTPStatusError as error:
+                if error.response.status_code == 422:
+                    try:
+                        error_payload = error.response.json()
+                        detail = error_payload.get("detail")
+                        api_error = error_payload.get("error")
+                        if isinstance(api_error, dict):
+                            detail = api_error.get("message") or detail
+                    except (ValueError, AttributeError):
+                        detail = None
+                    if isinstance(detail, list) and any(
+                        isinstance(item, dict) and item.get("type") == "too_long"
+                        for item in detail
+                    ):
+                        comparison_error = "Sélectionnez au maximum huit rapports."
+                    else:
+                        comparison_error = str(detail or "Ces rapports ne peuvent pas être comparés.")
+                else:
+                    return _error_page(request, error)
+            except httpx.HTTPError as error:
+                return _error_page(request, error)
+
+    return request.app.state.templates.TemplateResponse(
+        request,
+        "compare.html",
+        {
+            "page": page,
+            "selected_ids": selected_ids,
+            "reference_report_id": reference_report_id or (selected_ids[0] if selected_ids else None),
+            "comparison": comparison,
+            "comparison_error": comparison_error,
+        },
     )
 
 
