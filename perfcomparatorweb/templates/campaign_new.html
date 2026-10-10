@@ -1,0 +1,400 @@
+{% extends "base.html" %}
+{% block title %}Nouvelle campagne · PerfComparator{% endblock %}
+{% block content %}
+  <h1>Nouvelle campagne</h1>
+  <p class="lead">Choisissez les mesures, vérifiez les conditions de la machine, puis confirmez le lancement.</p>
+
+  <form id="campaign-form" class="campaign-form">
+    <section aria-labelledby="selection-title">
+      <h2 id="selection-title">1. Sélection</h2>
+      <label for="profile">Profil</label>
+      <select id="profile" name="profile" required>
+        {% for profile in catalog.profiles %}
+          <option value="{{ profile.profile_id }}" {% if profile.profile_id == "standard" %}selected{% endif %}>
+            {{ profile.profile_id }} · environ {{ profile.duration_seconds }} s par benchmark
+          </option>
+        {% endfor %}
+      </select>
+
+      <label for="repetitions">Répétitions</label>
+      <select id="repetitions" name="repetitions">
+        {% for count in range(1, 10) %}<option value="{{ count }}" {% if count == 3 %}selected{% endif %}>{{ count }}</option>{% endfor %}
+      </select>
+
+      <label for="label">Nom de la campagne (facultatif)</label>
+      <input id="label" name="label" type="text" maxlength="120" autocomplete="off">
+
+      <h3>Benchmarks</h3>
+      {% for group in catalog.groups if group.group_id != "all" %}
+        <fieldset class="benchmark-group">
+          <legend>{{ group.group_id }}</legend>
+          {% for benchmark in catalog.benchmarks if benchmark.benchmark_id in group.benchmark_ids %}
+            <label class="benchmark-choice">
+              <input type="checkbox" name="benchmark_ids" value="{{ benchmark.benchmark_id }}">
+              <span><strong>{{ benchmark.name }}</strong><small>{{ benchmark.description }}</small></span>
+            </label>
+          {% endfor %}
+        </fieldset>
+      {% endfor %}
+      <p id="selection-error" class="form-error" role="alert" hidden></p>
+      <button id="check-readiness" type="submit">Vérifier la préparation</button>
+    </section>
+  </form>
+
+  <section id="readiness-panel" aria-labelledby="readiness-title" aria-live="polite" hidden>
+    <h2 id="readiness-title">2. Conditions de mesure</h2>
+    <div id="readiness-content"></div>
+    <label class="acknowledgement">
+      <input id="acknowledge-warnings" type="checkbox">
+      J’ai pris connaissance de ces conditions et souhaite continuer.
+    </label>
+    <button id="confirm-campaign" type="button" disabled>Confirmer et lancer la campagne</button>
+  </section>
+
+  <section id="campaign-result" role="status" aria-live="polite" hidden></section>
+
+  <script>
+    (() => {
+      const form = document.getElementById("campaign-form");
+      const readinessPanel = document.getElementById("readiness-panel");
+      const readinessContent = document.getElementById("readiness-content");
+      const acknowledge = document.getElementById("acknowledge-warnings");
+      const confirmButton = document.getElementById("confirm-campaign");
+      const selectionError = document.getElementById("selection-error");
+      const resultPanel = document.getElementById("campaign-result");
+      let checkedCampaign = null;
+      let idempotencyKey = crypto.randomUUID();
+
+      function campaignRequest() {
+        const data = new FormData(form);
+        const label = data.get("label").trim();
+        return {
+          profile: data.get("profile"),
+          benchmark_ids: data.getAll("benchmark_ids"),
+          repetitions: Number(data.get("repetitions")),
+          label: label || null,
+        };
+      }
+
+      function showApiError(container, payload, fallback) {
+        container.replaceChildren();
+        const message = document.createElement("p");
+        message.className = "notice";
+        message.textContent = payload.message || fallback;
+        container.append(message);
+      }
+
+      function watchCampaign(task) {
+        resultPanel.replaceChildren();
+        const heading = document.createElement("h2");
+        heading.textContent = "Suivi de la campagne";
+        const status = document.createElement("p");
+        status.className = "campaign-status";
+        const identifier = document.createElement("p");
+        identifier.className = "muted";
+        identifier.textContent = `Identifiant : ${task.task_id}`;
+        const progress = document.createElement("progress");
+        progress.setAttribute("aria-label", "Progression de la campagne");
+        const progressText = document.createElement("p");
+        progressText.className = "muted";
+        const current = document.createElement("p");
+        const connection = document.createElement("p");
+        connection.className = "muted";
+        const eventsHeading = document.createElement("h3");
+        eventsHeading.textContent = "Activité";
+        const events = document.createElement("ol");
+        events.className = "campaign-events";
+        events.setAttribute("aria-live", "polite");
+        const reportLink = document.createElement("a");
+        reportLink.className = "campaign-report-link";
+        reportLink.hidden = true;
+        reportLink.textContent = "Consulter le rapport détaillé";
+        resultPanel.append(heading, status, identifier, progress, progressText, current, connection, eventsHeading, events, reportLink);
+
+        const statusLabels = {
+          queued: "En attente de démarrage",
+          running: "En cours",
+          cancel_requested: "Annulation demandée",
+          succeeded: "Terminée avec succès",
+          completed_with_errors: "Terminée avec des échecs de benchmarks",
+          failed: "Échec de la campagne",
+          cancelled: "Annulée",
+          interrupted: "Interrompue par l’arrêt du moteur",
+        };
+        const benchmarkNames = new Map(
+          [...form.querySelectorAll('input[name="benchmark_ids"]')].map((input) => [
+            input.value,
+            input.closest("label").querySelector("strong").textContent,
+          ]),
+        );
+        const terminalStatuses = new Set([
+          "succeeded", "completed_with_errors", "failed", "cancelled", "interrupted",
+        ]);
+        let source = null;
+
+        function addEvent(text) {
+          const item = document.createElement("li");
+          item.textContent = text;
+          events.append(item);
+          while (events.children.length > 40) events.firstElementChild.remove();
+        }
+
+        function update(taskState) {
+          status.textContent = statusLabels[taskState.status] || taskState.status;
+          progress.max = Math.max(taskState.total_benchmarks || task.total_benchmarks, 1);
+          progress.value = taskState.completed_benchmarks ?? progress.value;
+          progressText.textContent = `${progress.value} / ${progress.max} benchmark(s) terminés`;
+          if (Object.hasOwn(taskState, "current_benchmark")) {
+            const name = benchmarkNames.get(taskState.current_benchmark) || taskState.current_benchmark;
+            current.textContent = name ? `En cours : ${name}` : "";
+          } else if (terminalStatuses.has(taskState.status)) {
+            current.textContent = "";
+          }
+          if (taskState.report_id) {
+            reportLink.href = `/reports/${encodeURIComponent(taskState.report_id)}`;
+            reportLink.hidden = false;
+          }
+          if (terminalStatuses.has(taskState.status)) {
+            if (source) source.close();
+            connection.textContent = "Suivi terminé.";
+          }
+        }
+
+        const benchmarkName = (id) => benchmarkNames.get(id) || id || "benchmark";
+        const taskUrl = `/api/campaigns/${encodeURIComponent(task.task_id)}`;
+        update(task);
+        source = new EventSource(`${taskUrl}/events`);
+        source.onopen = () => { connection.textContent = "Suivi en direct connecté."; };
+        source.onerror = () => {
+          if (!source || source.readyState === EventSource.CLOSED) return;
+          connection.textContent = "Connexion interrompue ; tentative de reconnexion automatique…";
+        };
+        source.addEventListener("accepted", () => {
+          addEvent("La campagne a été acceptée et ajoutée à la file.");
+        });
+        source.addEventListener("started", () => {
+          update({ status: "running", completed_benchmarks: progress.value });
+          addEvent("La campagne a démarré.");
+        });
+        source.addEventListener("cancel_requested", () => {
+          update({ status: "cancel_requested", completed_benchmarks: progress.value });
+          addEvent("Une demande d’annulation a été reçue.");
+        });
+        source.addEventListener("benchmark_started", (event) => {
+          const data = JSON.parse(event.data);
+          const id = data.payload.benchmark_id;
+          update({
+            status: "running",
+            completed_benchmarks: data.payload.completed,
+            total_benchmarks: progress.max,
+            current_benchmark: id,
+          });
+          addEvent(`Mesure démarrée : ${benchmarkName(id)}.`);
+        });
+        source.addEventListener("benchmark_succeeded", (event) => {
+          const data = JSON.parse(event.data);
+          const payload = data.payload;
+          update({
+            status: "running",
+            completed_benchmarks: payload.completed,
+            total_benchmarks: progress.max,
+            current_benchmark: null,
+          });
+          addEvent(`Mesure terminée : ${benchmarkName(payload.benchmark_id)} — ${payload.value} ${payload.unit} (${payload.repetitions} passage(s)).`);
+        });
+        source.addEventListener("benchmark_failed", (event) => {
+          const data = JSON.parse(event.data);
+          const payload = data.payload;
+          update({
+            status: "running",
+            completed_benchmarks: payload.completed,
+            total_benchmarks: progress.max,
+            current_benchmark: null,
+          });
+          addEvent(`Mesure en échec : ${benchmarkName(payload.benchmark_id)} (${payload.error_code || "erreur"}).`);
+        });
+        source.addEventListener("completed", (event) => {
+          const data = JSON.parse(event.data);
+          update({
+            status: data.payload.status,
+            completed_benchmarks: progress.max,
+            total_benchmarks: progress.max,
+            report_id: data.payload.report_id,
+          });
+          addEvent("Le rapport de campagne est prêt.");
+        });
+        for (const terminal of ["failed", "cancelled", "interrupted"]) {
+          source.addEventListener(terminal, (event) => {
+            const data = JSON.parse(event.data);
+            update({
+              status: terminal,
+              completed_benchmarks: progress.value,
+              report_id: data.payload.report_id,
+            });
+            addEvent(data.payload.error_code
+              ? `La campagne s’est terminée avec l’erreur ${data.payload.error_code}.`
+              : {
+                  failed: "La campagne a échoué.",
+                  cancelled: "La campagne a été annulée.",
+                  interrupted: "La campagne a été interrompue par l’arrêt du moteur.",
+                }[terminal]);
+            if (terminal === "cancelled" && data.payload.report_id) {
+              addEvent("Un rapport partiel est disponible.");
+            }
+          });
+        }
+        source.addEventListener("resync", async () => {
+          try {
+            const response = await fetch(taskUrl);
+            if (!response.ok) throw new Error("task unavailable");
+            const taskState = await response.json();
+            update(taskState);
+            addEvent("État actualisé après une reconnexion du suivi.");
+          } catch (_error) {
+            connection.textContent = "Impossible de récupérer l’état actuel ; le suivi va réessayer.";
+          }
+        });
+      }
+
+      function invalidateReadiness() {
+        checkedCampaign = null;
+        idempotencyKey = crypto.randomUUID();
+        readinessPanel.hidden = true;
+        acknowledge.checked = false;
+        confirmButton.disabled = true;
+        resultPanel.hidden = true;
+      }
+
+      form.addEventListener("change", invalidateReadiness);
+      acknowledge.addEventListener("change", () => {
+        confirmButton.disabled = !acknowledge.checked || checkedCampaign === null;
+      });
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        selectionError.hidden = true;
+        const campaign = campaignRequest();
+        if (campaign.benchmark_ids.length === 0) {
+          selectionError.textContent = "Sélectionnez au moins un benchmark.";
+          selectionError.hidden = false;
+          return;
+        }
+
+        invalidateReadiness();
+        const button = document.getElementById("check-readiness");
+        button.disabled = true;
+        button.textContent = "Vérification en cours…";
+        try {
+          const response = await fetch("/api/campaigns/readiness", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(campaign),
+          });
+          const readiness = await response.json();
+          if (JSON.stringify(campaignRequest()) !== JSON.stringify(campaign)) return;
+          if (!response.ok) {
+            showApiError(readinessContent, readiness, "La vérification préalable a échoué.");
+            readinessPanel.hidden = false;
+            return;
+          }
+
+          checkedCampaign = JSON.stringify(campaign);
+          readinessContent.replaceChildren();
+          const metrics = document.createElement("dl");
+          metrics.className = "details-grid";
+          const values = [
+            ["Charge CPU", `${readiness.cpu_percent} %`],
+            ["Mémoire disponible", `${readiness.memory_available_percent} %`],
+            ["Échange mémoire", `${readiness.swap_percent} %`],
+          ];
+          for (const [label, value] of values) {
+            const term = document.createElement("dt");
+            const description = document.createElement("dd");
+            term.textContent = label;
+            description.textContent = value;
+            metrics.append(term, description);
+          }
+          readinessContent.append(metrics);
+
+          const messages = [...readiness.warnings];
+          for (const process of readiness.active_processes) {
+            messages.push(`${process.name} : CPU ${process.cpu_percent} %, mémoire ${process.memory_percent} %.`);
+          }
+          if (messages.length || !readiness.suitable) {
+            const heading = document.createElement("p");
+            heading.className = "notice";
+            heading.textContent = readiness.suitable
+              ? "Conditions relevées avant la campagne :"
+              : "Les conditions peuvent réduire la stabilité des résultats :";
+            const list = document.createElement("ul");
+            list.className = "notice-list";
+            if (!messages.length) messages.push("PCE estime que les conditions de mesure sont peu favorables.");
+            for (const text of messages) {
+              const item = document.createElement("li");
+              item.textContent = text;
+              list.append(item);
+            }
+            readinessContent.append(heading, list);
+          } else {
+            const message = document.createElement("p");
+            message.className = "notice-success";
+            message.textContent = "Aucun avertissement détecté. Vous pouvez confirmer le lancement.";
+            readinessContent.append(message);
+          }
+          readinessPanel.hidden = false;
+          acknowledge.checked = false;
+          confirmButton.disabled = true;
+          resultPanel.hidden = true;
+        } catch (_error) {
+          showApiError(readinessContent, {}, "PCWEB n’a pas pu contacter le moteur PCE.");
+          readinessPanel.hidden = false;
+        } finally {
+          button.disabled = false;
+          button.textContent = "Vérifier à nouveau";
+        }
+      });
+
+      confirmButton.addEventListener("click", async () => {
+        if (!acknowledge.checked || checkedCampaign === null) return;
+        confirmButton.disabled = true;
+        confirmButton.textContent = "Lancement en cours…";
+        form.querySelectorAll("input, select, button").forEach((control) => {
+          control.disabled = true;
+        });
+        acknowledge.disabled = true;
+        let accepted = false;
+        resultPanel.hidden = false;
+        resultPanel.replaceChildren();
+        try {
+          const response = await fetch("/api/campaigns", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Idempotency-Key": idempotencyKey,
+            },
+            body: checkedCampaign,
+          });
+          const result = await response.json();
+          if (!response.ok) {
+            showApiError(resultPanel, result, "PCE n’a pas accepté la campagne.");
+            return;
+          }
+          accepted = true;
+          watchCampaign(result.task);
+          idempotencyKey = crypto.randomUUID();
+        } catch (_error) {
+          showApiError(resultPanel, {}, "PCWEB n’a pas pu contacter le moteur PCE.");
+        } finally {
+          confirmButton.disabled = accepted;
+          confirmButton.textContent = accepted ? "Campagne envoyée" : "Réessayer le lancement";
+          if (!accepted) {
+            form.querySelectorAll("input, select, button").forEach((control) => {
+              control.disabled = false;
+            });
+            acknowledge.disabled = false;
+          }
+        }
+      });
+    })();
+  </script>
+{% endblock %}
