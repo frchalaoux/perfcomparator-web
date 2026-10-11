@@ -31,7 +31,7 @@ class PCEClient:
         path: str,
         response_model: type[ResponseModel],
         *,
-        params: dict[str, int] | None = None,
+        params: dict[str, int | str] | None = None,
     ) -> dict[str, object]:
         response = await self._client.get(path, params=params)
         response.raise_for_status()
@@ -60,11 +60,39 @@ class PCEClient:
             raise PCEContractError(f"Réponse PCE incompatible pour {path}.") from error
         return parsed.model_dump(mode="json")
 
+    async def _patch(
+        self,
+        path: str,
+        response_model: type[ResponseModel],
+        *,
+        payload: dict[str, object],
+    ) -> dict[str, object]:
+        response = await self._client.patch(path, json=payload)
+        response.raise_for_status()
+        try:
+            parsed = response_model.model_validate(response.json())
+        except (ValidationError, TypeError, ValueError) as error:
+            raise PCEContractError(f"Réponse PCE incompatible pour {path}.") from error
+        return parsed.model_dump(mode="json")
+
     async def health(self) -> dict[str, object]:
         return await self._get("/api/v1/health", schemas.HealthResponse)
 
     async def system(self) -> dict[str, object]:
         return await self._get("/api/v1/system", schemas.SystemEnvelope)
+
+    async def update_machine_metadata(
+        self,
+        *,
+        model: str,
+        model_year: int | None,
+        product_sku: str | None,
+    ) -> dict[str, object]:
+        return await self._patch(
+            "/api/v1/system/machine",
+            schemas.SystemEnvelope,
+            payload={"model": model, "model_year": model_year, "product_sku": product_sku},
+        )
 
     async def benchmarks(self) -> dict[str, object]:
         return await self._get("/api/v1/benchmarks", schemas.BenchmarkCatalog)
@@ -73,16 +101,37 @@ class PCEClient:
         path = f"/api/v1/benchmarks/{quote(benchmark_id, safe='')}"
         return await self._get(path, schemas.BenchmarkDetail)
 
-    async def reports(self, *, offset: int = 0, limit: int = 20) -> dict[str, object]:
+    async def reports(
+        self,
+        *,
+        offset: int = 0,
+        limit: int = 20,
+        q: str = "",
+    ) -> dict[str, object]:
         return await self._get(
             "/api/v1/reports",
             schemas.ReportPage,
-            params={"offset": offset, "limit": limit},
+            params={"offset": offset, "limit": limit, "q": q},
         )
 
     async def report(self, report_id: str) -> dict[str, object]:
         path = f"/api/v1/reports/{quote(report_id, safe='')}"
         return await self._get(path, schemas.ReportDetail)
+
+    async def update_report_machine(
+        self,
+        report_id: str,
+        *,
+        model: str,
+        model_year: int | None,
+        product_sku: str | None,
+    ) -> dict[str, object]:
+        path = f"/api/v1/reports/{quote(report_id, safe='')}/machine"
+        return await self._patch(
+            path,
+            schemas.ReportMachineMetadataUpdate,
+            payload={"model": model, "model_year": model_year, "product_sku": product_sku},
+        )
 
     async def compare_reports(
         self,
@@ -98,6 +147,24 @@ class PCEClient:
                 "reference_report_id": reference_report_id,
             },
         )
+
+    async def comparison_html(
+        self,
+        report_ids: list[str],
+        *,
+        reference_report_id: str,
+    ) -> str:
+        response = await self._client.post(
+            "/api/v1/comparisons/export",
+            json={
+                "report_ids": report_ids,
+                "reference_report_id": reference_report_id,
+            },
+        )
+        response.raise_for_status()
+        if "text/html" not in response.headers.get("content-type", ""):
+            raise PCEContractError("PCE a renvoyé un export de comparaison incompatible.")
+        return response.text
 
     async def readiness(self) -> dict[str, object]:
         return await self._post("/api/v1/readiness", schemas.CampaignReadiness)

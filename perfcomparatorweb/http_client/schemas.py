@@ -101,6 +101,8 @@ class ReportSystem(BaseModel):
     release: str
     machine: str
     model: str
+    model_year: int | None
+    product_sku: str | None = None
     manufacturer: str | None
     product_name: str | None
     processor: str
@@ -108,6 +110,8 @@ class ReportSystem(BaseModel):
     logical_cpu_count: int
     memory_bytes: int | None
     gpu_devices: list[str]
+    python_version: str
+    python_implementation: str
 
 
 class ReportResult(BaseModel):
@@ -139,6 +143,13 @@ class ReportDetail(ReportSummary):
     environment_warnings: list[str]
     results: list[ReportResult]
     failures: list[ReportFailure]
+
+
+class ReportMachineMetadataUpdate(BaseModel):
+    report_id: str
+    model: str
+    model_year: int | None
+    product_sku: str | None = None
 
 
 class ComparisonMetric(BaseModel):

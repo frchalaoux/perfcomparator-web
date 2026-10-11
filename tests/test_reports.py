@@ -70,7 +70,7 @@ class FakePCEClient:
     async def close(self):
         pass
 
-    async def reports(self, *, offset: int = 0, limit: int = 20):
+    async def reports(self, *, offset: int = 0, limit: int = 20, q: str = ""):
         reports = [_summary(REFERENCE_ID, "Machine référence"), _summary(CANDIDATE_ID, "Machine candidate")]
         return {
             "reports": reports[offset : offset + limit],

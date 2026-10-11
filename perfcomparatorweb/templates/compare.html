@@ -7,34 +7,46 @@
   {% if page.warnings %}<ul class="notice-list">{% for warning in page.warnings %}<li>{{ warning }}</li>{% endfor %}</ul>{% endif %}
   {% if comparison_error %}<p class="notice" role="alert">{{ comparison_error }}</p>{% endif %}
 
-  {% if page.reports %}
+  {% if page.total or search_query %}
     <form method="get" action="/compare" id="comparison-selection">
       <input type="hidden" name="offset" value="{{ page.offset }}">
-      <input type="hidden" name="limit" value="{{ page.limit }}">
+      <input type="hidden" name="reference_report_id" id="comparison-reference" value="{{ reference_report_id or '' }}">
+      {% for selected_id in selected_ids if selected_id not in visible_report_ids %}
+        <input type="hidden" class="persisted-report-id" name="report_id" value="{{ selected_id }}">
+      {% endfor %}
+      <label class="machine-search" for="machine-search">
+        Filtrer le lot affiché
+        <input id="machine-search" type="search" name="q" value="{{ search_query }}" maxlength="120" placeholder="Nom, modèle, processeur…">
+      </label>
+      <button type="submit" name="action" value="search">Rechercher dans tous les rapports</button>
+      <p class="muted">La saisie filtre immédiatement ce lot. Le bouton recherche dans tous les lots ; les sélections déjà faites sont conservées.</p>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Inclure</th><th>Référence</th><th>Date</th><th>Machine</th><th>Profil</th><th>Résultats</th></tr></thead>
           <tbody>
             {% for report in page.reports %}
-              <tr>
+              <tr class="report-row" data-machine-search="{{ [report.label or report.machine, report.machine]|join(' ')|lower }}">
                 <td><input type="checkbox" name="report_id" value="{{ report.report_id }}" aria-label="Inclure {{ report.label or report.machine }}" {% if report.report_id in selected_ids %}checked{% endif %}></td>
-                <td><input type="radio" name="reference_report_id" value="{{ report.report_id }}" aria-label="Choisir {{ report.label or report.machine }} comme référence" {% if report.report_id == reference_report_id %}checked{% endif %}></td>
+                <td><input type="radio" name="reference_choice" value="{{ report.report_id }}" aria-label="Choisir {{ report.label or report.machine }} comme référence" {% if report.report_id == reference_report_id %}checked{% endif %}></td>
                 <td><a href="/reports/{{ report.report_id }}">{{ report.recorded_at }}</a></td>
                 <td>{{ report.label or report.machine }}</td>
                 <td>{{ report.profile }} · {{ report.repetitions }} passage(s)</td>
                 <td>{{ report.result_count }} réussi(s), {{ report.failure_count }} échec(s)</td>
               </tr>
             {% endfor %}
+            {% if not page.reports %}<tr><td colspan="6">Aucune machine ne correspond dans l’ensemble des rapports.</td></tr>{% endif %}
+            <tr id="no-lot-match" hidden><td colspan="6">Aucune machine ne correspond dans ce lot.</td></tr>
           </tbody>
         </table>
       </div>
-      <p><button type="submit">Comparer la sélection</button></p>
+      <p id="reference-status" class="muted" aria-live="polite">Référence actuelle : <span></span></p>
+      <p><button type="submit" name="action" value="compare">Comparer la sélection (<span id="selected-report-count">{{ selected_ids|length }}</span>)</button></p>
     </form>
     <nav class="pagination" aria-label="Pages des rapports à comparer">
-      {% if page.offset > 0 %}<a href="/compare?offset={{ [page.offset - page.limit, 0]|max }}&amp;limit={{ page.limit }}">← Rapports plus récents</a>{% endif %}
-      {% if page.offset + page.limit < page.total %}<a href="/compare?offset={{ page.offset + page.limit }}&amp;limit={{ page.limit }}">Rapports plus anciens →</a>{% endif %}
+      {% if page.offset > 0 %}<a data-page-offset="{{ [page.offset - page.limit, 0]|max }}" href="/compare?offset={{ [page.offset - page.limit, 0]|max }}{% if search_query %}&amp;q={{ search_query|urlencode }}{% endif %}{% for selected_id in selected_ids %}&amp;report_id={{ selected_id|urlencode }}{% endfor %}{% if reference_report_id %}&amp;reference_report_id={{ reference_report_id|urlencode }}{% endif %}&amp;action=search">← Lot précédent</a>{% endif %}
+      <span>Lot {{ (page.offset // page.limit) + 1 }} · <span id="lot-match-count">{{ page.reports|length }}</span> rapport(s) affiché(s) sur {{ page.total }}</span>
+      {% if page.offset + page.limit < page.total %}<a data-page-offset="{{ page.offset + page.limit }}" href="/compare?offset={{ page.offset + page.limit }}{% if search_query %}&amp;q={{ search_query|urlencode }}{% endif %}{% for selected_id in selected_ids %}&amp;report_id={{ selected_id|urlencode }}{% endfor %}{% if reference_report_id %}&amp;reference_report_id={{ reference_report_id|urlencode }}{% endif %}&amp;action=search">Lot suivant →</a>{% endif %}
     </nav>
-    <p class="muted">{{ page.total }} rapport(s) disponibles. La sélection porte sur la page affichée.</p>
   {% else %}
     <section><h2>Aucun rapport</h2><p>Lancez une campagne sur chaque machine, puis ouvrez ici les rapports à comparer.</p></section>
   {% endif %}
@@ -48,8 +60,11 @@
           <article class="comparison-machine">
             <h3>{{ machine.label }}{% if machine.report_id == comparison.baseline_report_id %} <span class="badge">Référence</span>{% endif %}</h3>
             <p>{{ machine.system.product_name or machine.system.model }}</p>
+            <p>Identifiant du modèle : {{ machine.system.model }} · Année : {{ machine.system.model_year or "Non renseignée" }}</p>
+            <p>Référence produit : {{ machine.system.product_sku or "Non renseignée" }}</p>
             <p class="muted">{{ machine.recorded_at }} · {{ machine.profile }} · {{ machine.system.system }} {{ machine.system.release }}</p>
             <p class="comparison-index">Indice global : <strong>{{ "%.1f"|format(machine.overall_index) }}</strong></p>
+            <p class="muted">Écart avec la référence : {{ "%+.1f"|format(machine.overall_index - 100) }} %</p>
             <p>{{ machine.narrative }}</p>
             <details><summary>Configuration matérielle</summary>
               <dl class="details-grid">
@@ -59,6 +74,44 @@
                 <dt>GPU</dt><dd>{{ machine.system.gpu_devices|join(", ") or "Inconnu" }}</dd>
               </dl>
             </details>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section aria-labelledby="category-comparison-title">
+      <h2 id="category-comparison-title">Résultats par catégorie</h2>
+      <p class="muted">Indice 100 = machine de référence. Un indice supérieur indique un meilleur résultat relatif.</p>
+      <div class="comparison-breakdowns">
+        {% for category in category_rows %}
+          <article class="comparison-breakdown">
+            <h3>{{ category.label }}</h3>
+            {% for item in category.machines %}
+              <div class="comparison-bar-row">
+                <span>{{ item.label }}</span>
+                <div class="comparison-bar-track"><span style="width: {{ item.width }}%"></span></div>
+                <strong>{{ "%.1f"|format(item.index) }}</strong>
+              </div>
+            {% endfor %}
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section aria-labelledby="scenario-comparison-title">
+      <h2 id="scenario-comparison-title">Scénarios d’usage</h2>
+      <p class="muted">Les scénarios combinent plusieurs mesures ; leur poids est indiqué pour expliquer l’indice global.</p>
+      <div class="comparison-breakdowns">
+        {% for scenario in scenario_rows %}
+          <article class="comparison-breakdown">
+            <h3>{{ scenario.label }} <span class="muted">· poids {{ "%.0f"|format(scenario.weight * 100) }} %</span></h3>
+            {% for item in scenario.machines %}
+              <div class="comparison-bar-row">
+                <span>{{ item.label }}</span>
+                <div class="comparison-bar-track"><span style="width: {{ item.width }}%"></span></div>
+                <strong>{{ "%.1f"|format(item.index) }}</strong>
+              </div>
+            {% endfor %}
           </article>
         {% endfor %}
       </div>
@@ -78,34 +131,97 @@
               <th scope="row">{{ comparison.machines[0].metrics[benchmark_id].name }}<br><span class="muted">{{ benchmark_id }}</span></th>
               {% for machine in comparison.machines %}
                 {% set metric = machine.metrics[benchmark_id] %}
-                <td><strong>{{ "%.1f"|format(metric.index) }}</strong> · {{ "%.3f"|format(metric.value) }} {{ metric.unit }}<br><span class="muted">{{ metric.difference_percent|round(1) }} % · {{ metric.conclusion }}</span></td>
+                <td><strong>{{ "%.1f"|format(metric.index) }}</strong> · {{ "%.3f"|format(metric.value) }} {{ metric.unit }}<br><span class="muted">{{ "%+.1f"|format(metric.difference_percent) }} % · {{ metric.conclusion }}<br>{{ metric.uncertainty }}{% if metric.spread_percent is not none %} · dispersion {{ "%.1f"|format(metric.spread_percent) }} %{% endif %}</span></td>
               {% endfor %}
             </tr>
           {% endfor %}
         </tbody>
       </table></div>
     </section>
+
+    <section class="report-export" aria-labelledby="report-export-title">
+      <h2 id="report-export-title">Exporter le rapport</h2>
+      <p>Le rapport détaillé reprend les sections de comparaison de PerfComparator 0.5.0 : synthèse, commentaires, catégories, scénarios, carte thermique, temps équivalents et mesures benchmark avec leur dispersion. Il peut être consulté ici, téléchargé en HTML autonome ou imprimé en PDF.</p>
+      <form method="get" action="/compare/report" target="_blank" rel="noopener">
+        {% for machine in comparison.machines %}<input type="hidden" name="report_id" value="{{ machine.report_id }}">{% endfor %}
+        <input type="hidden" name="reference_report_id" value="{{ comparison.baseline_report_id }}">
+        <button type="submit">Ouvrir le rapport détaillé complet</button>
+      </form>
+      <form method="get" action="/compare/export">
+        {% for machine in comparison.machines %}<input type="hidden" name="report_id" value="{{ machine.report_id }}">{% endfor %}
+        <input type="hidden" name="reference_report_id" value="{{ comparison.baseline_report_id }}">
+        <button type="submit">Télécharger le rapport complet (HTML)</button>
+      </form>
+    </section>
   {% endif %}
 
   <script>
     const selectionForm = document.querySelector("#comparison-selection");
     if (selectionForm) {
-      const checkboxes = [...selectionForm.querySelectorAll('input[name="report_id"]')];
-      const references = [...selectionForm.querySelectorAll('input[name="reference_report_id"]')];
-      const selectReference = () => {
-        if (references.some((input) => input.checked && input.closest("tr").querySelector('input[name="report_id"]').checked)) return;
-        const firstSelected = checkboxes.find((input) => input.checked);
-        references.forEach((input) => { input.checked = firstSelected !== undefined && input.value === firstSelected.value; });
-      };
-      checkboxes.forEach((input) => input.addEventListener("change", () => {
-        if (input.checked && !references.some((reference) => reference.checked)) {
-          references.find((reference) => reference.value === input.value).checked = true;
-        } else if (!input.checked) {
-          selectReference();
+      const checkboxes = [...selectionForm.querySelectorAll('input[type="checkbox"][name="report_id"]')];
+      const persistedIds = [...selectionForm.querySelectorAll(".persisted-report-id")];
+      const references = [...selectionForm.querySelectorAll('input[name="reference_choice"]')];
+      const referenceInput = selectionForm.querySelector("#comparison-reference");
+      const appliedQuery = new URLSearchParams(window.location.search).get("q") || "";
+      const referenceStatus = document.querySelector("#reference-status span");
+      const selectedCount = document.querySelector("#selected-report-count");
+      const searchInput = document.querySelector("#machine-search");
+      const reportRows = [...selectionForm.querySelectorAll("tr.report-row")];
+      const noLotMatch = document.querySelector("#no-lot-match");
+      const lotMatchCount = document.querySelector("#lot-match-count");
+      const selectedReportIds = () => [...new Set([
+        ...persistedIds.map((input) => input.value),
+        ...checkboxes.filter((input) => input.checked).map((input) => input.value),
+      ])];
+      const updateSelection = () => {
+        const ids = selectedReportIds();
+        selectedCount.textContent = ids.length;
+        const selectedReference = references.find((input) => input.checked && ids.includes(input.value));
+        if (selectedReference) {
+          referenceInput.value = selectedReference.value;
+        } else if (!ids.includes(referenceInput.value)) {
+          referenceInput.value = ids[0] || "";
+          references.forEach((input) => { input.checked = input.value === referenceInput.value; });
         }
-      }));
+        const currentReference = references.find((input) => input.value === referenceInput.value);
+        referenceStatus.textContent = currentReference
+          ? currentReference.closest("tr").cells[3].textContent.trim()
+          : referenceInput.value
+            ? "Rapport sélectionné dans un autre lot"
+            : "Aucune";
+      };
+      const filterCurrentLot = () => {
+        const query = searchInput.value.trim().toLocaleLowerCase("fr");
+        let visibleCount = 0;
+        reportRows.forEach((row) => {
+          const matches = row.dataset.machineSearch.toLocaleLowerCase("fr").includes(query);
+          row.hidden = !matches;
+          if (matches) visibleCount += 1;
+        });
+        lotMatchCount.textContent = visibleCount;
+        noLotMatch.hidden = visibleCount > 0 || reportRows.length === 0;
+      };
+      updateSelection();
+      filterCurrentLot();
+      searchInput.addEventListener("input", filterCurrentLot);
+      checkboxes.forEach((input) => input.addEventListener("change", updateSelection));
       references.forEach((input) => input.addEventListener("change", () => {
         checkboxes.find((checkbox) => checkbox.value === input.value).checked = true;
+        referenceInput.value = input.value;
+        updateSelection();
+      }));
+      selectionForm.addEventListener("submit", (event) => {
+        if (event.submitter?.value === "search") selectionForm.elements.offset.value = "0";
+      });
+      document.querySelectorAll(".pagination a[data-page-offset]").forEach((link) => link.addEventListener("click", (event) => {
+        event.preventDefault();
+        const url = new URL("/compare", window.location.origin);
+        url.searchParams.set("offset", link.dataset.pageOffset);
+        url.searchParams.set("action", "search");
+        if (appliedQuery) url.searchParams.set("q", appliedQuery);
+        selectedReportIds().forEach((reportId) => url.searchParams.append("report_id", reportId));
+        if (referenceInput.value) url.searchParams.set("reference_report_id", referenceInput.value);
+        window.location.assign(url);
       }));
     }
   </script>

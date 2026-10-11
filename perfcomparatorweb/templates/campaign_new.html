@@ -31,7 +31,12 @@
       </label>
       {% for group in catalog.groups if group.group_id != "all" %}
         <fieldset class="benchmark-group">
-          <legend>{{ group.group_id }}</legend>
+          <legend>
+            <label class="benchmark-group-toggle">
+              <input type="checkbox" class="select-benchmark-group" aria-label="Sélectionner tous les tests du groupe {{ group.group_id|upper }}">
+              <span>Tous les tests du groupe {{ group.group_id|upper }}</span>
+            </label>
+          </legend>
           {% for benchmark in catalog.benchmarks if benchmark.benchmark_id in group.benchmark_ids %}
             <label class="benchmark-choice">
               <input type="checkbox" name="benchmark_ids" value="{{ benchmark.benchmark_id }}">
@@ -68,13 +73,22 @@
       const resultPanel = document.getElementById("campaign-result");
       const selectAllBenchmarks = document.getElementById("select-all-benchmarks");
       const benchmarkInputs = [...form.querySelectorAll('input[name="benchmark_ids"]')];
+      const benchmarkGroups = [...form.querySelectorAll(".benchmark-group")].map((fieldset) => ({
+        toggle: fieldset.querySelector(".select-benchmark-group"),
+        benchmarks: [...fieldset.querySelectorAll('input[name="benchmark_ids"]')],
+      }));
       let checkedCampaign = null;
       let idempotencyKey = crypto.randomUUID();
 
-      function updateSelectAllState() {
+      function updateSelectionControls() {
         const selectedCount = benchmarkInputs.filter((input) => input.checked).length;
         selectAllBenchmarks.checked = benchmarkInputs.length > 0 && selectedCount === benchmarkInputs.length;
         selectAllBenchmarks.indeterminate = selectedCount > 0 && selectedCount < benchmarkInputs.length;
+        for (const group of benchmarkGroups) {
+          const groupSelectedCount = group.benchmarks.filter((input) => input.checked).length;
+          group.toggle.checked = group.benchmarks.length > 0 && groupSelectedCount === group.benchmarks.length;
+          group.toggle.indeterminate = groupSelectedCount > 0 && groupSelectedCount < group.benchmarks.length;
+        }
       }
 
       function campaignRequest() {
@@ -281,11 +295,18 @@
         benchmarkInputs.forEach((input) => {
           input.checked = selectAllBenchmarks.checked;
         });
-        updateSelectAllState();
-        invalidateReadiness();
+        updateSelectionControls();
+      });
+      benchmarkGroups.forEach((group) => {
+        group.toggle.addEventListener("change", () => {
+          group.benchmarks.forEach((input) => {
+            input.checked = group.toggle.checked;
+          });
+          updateSelectionControls();
+        });
       });
       benchmarkInputs.forEach((input) => {
-        input.addEventListener("change", updateSelectAllState);
+        input.addEventListener("change", updateSelectionControls);
       });
       form.addEventListener("change", invalidateReadiness);
       acknowledge.addEventListener("change", () => {

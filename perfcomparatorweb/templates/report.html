@@ -10,13 +10,18 @@
     <ul class="item-list">{% for benchmark_id in report.requested_benchmarks %}<li>{{ benchmark_id }}</li>{% endfor %}</ul>
   </section>
   <section>
-    <h2>Machine</h2>
+    <h2>Système</h2>
     <dl class="details-grid">
+      <dt>Nom commercial</dt><dd>{{ report.system.product_name or "Inconnu" }}</dd>
+      <dt>Identifiant du modèle</dt><dd>{{ report.system.model }}</dd>
+      {% if report.system.model_year is not none %}<dt>Année du modèle</dt><dd>{{ report.system.model_year }}</dd>{% endif %}
+      {% if report.system.product_sku %}<dt>Référence produit</dt><dd>{{ report.system.product_sku }}</dd>{% endif %}
+      <dt>Fabricant</dt><dd>{{ report.system.manufacturer or "Inconnu" }}</dd>
       <dt>Système</dt><dd>{{ report.system.system }} {{ report.system.release }} · {{ report.system.machine }}</dd>
-      <dt>Modèle</dt><dd>{{ report.system.product_name or report.system.model }}</dd>
       <dt>Processeur</dt><dd>{{ report.system.processor }}</dd>
       <dt>Cœurs</dt><dd>{{ report.system.physical_cpu_count or "Inconnu" }} physiques · {{ report.system.logical_cpu_count }} logiques</dd>
       <dt>Mémoire</dt><dd>{% if report.system.memory_bytes %}{{ "%.1f"|format(report.system.memory_bytes / 1073741824) }} Gio{% else %}Inconnue{% endif %}</dd>
+      <dt>Python</dt><dd>{{ report.system.python_implementation }} {{ report.system.python_version }}</dd>
     </dl>
   </section>
   {% if report.environment_warnings %}
