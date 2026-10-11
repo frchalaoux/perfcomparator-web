@@ -84,8 +84,8 @@ class PCERepository:
             reference_report_id=reference_report_id,
         )
 
-    async def readiness(self) -> dict[str, object]:
-        return await self._client.readiness()
+    async def readiness(self, campaign: CampaignRequest | None = None) -> dict[str, object]:
+        return await self._client.readiness(campaign)
 
     async def create_campaign(
         self,

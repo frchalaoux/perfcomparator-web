@@ -96,9 +96,8 @@ async def campaign_readiness(
     campaign: CampaignRequest,
     request: Request,
 ) -> JSONResponse:
-    del campaign  # Valide la sélection avant le contrôle préalable ; PCE ne reçoit aucun choix ici.
     try:
-        result = await request.app.state.campaign_service.readiness()
+        result = await request.app.state.campaign_service.readiness(campaign)
     except httpx.HTTPError as error:
         return _upstream_error(error)
     return JSONResponse(content=result)

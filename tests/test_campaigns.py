@@ -45,7 +45,7 @@ class FakePCEClient:
             ],
         }
 
-    async def readiness(self):
+    async def readiness(self, _campaign=None):
         self.readiness_calls += 1
         return {
             "sample_seconds": 1,

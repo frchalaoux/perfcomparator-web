@@ -52,11 +52,22 @@ class PCEClient:
         *,
         payload: dict[str, object] | None = None,
         headers: dict[str, str] | None = None,
+        timeout: httpx.Timeout | None = None,
     ) -> dict[str, object]:
         if payload is None:
-            response = await self._client.post(path, headers=headers)
-        else:
+            if timeout is None:
+                response = await self._client.post(path, headers=headers)
+            else:
+                response = await self._client.post(path, headers=headers, timeout=timeout)
+        elif timeout is None:
             response = await self._client.post(path, json=payload, headers=headers)
+        else:
+            response = await self._client.post(
+                path,
+                json=payload,
+                headers=headers,
+                timeout=timeout,
+            )
         response.raise_for_status()
         try:
             parsed = response_model.model_validate(response.json())
@@ -179,8 +190,22 @@ class PCEClient:
             raise PCEContractError("PCE a renvoyé un export de comparaison incompatible.")
         return response.text
 
-    async def readiness(self) -> dict[str, object]:
-        return await self._post("/api/v1/readiness", schemas.CampaignReadiness)
+    async def readiness(
+        self,
+        campaign: schemas.CampaignRequest | None = None,
+    ) -> dict[str, object]:
+        if campaign is None:
+            return await self._post("/api/v1/readiness", schemas.CampaignReadiness)
+        gpu_selected = any(
+            benchmark_id.startswith("gpu.") for benchmark_id in campaign.benchmark_ids
+        )
+        timeout = httpx.Timeout(60.0, connect=1.0) if gpu_selected else None
+        return await self._post(
+            "/api/v1/readiness",
+            schemas.CampaignReadiness,
+            payload=campaign.model_dump(mode="json"),
+            timeout=timeout,
+        )
 
     async def create_campaign(
         self,

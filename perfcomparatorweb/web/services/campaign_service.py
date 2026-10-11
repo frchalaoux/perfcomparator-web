@@ -10,8 +10,8 @@ class CampaignService:
     def __init__(self, pce: PCERepository) -> None:
         self._pce = pce
 
-    async def readiness(self) -> dict[str, object]:
-        return await self._pce.readiness()
+    async def readiness(self, campaign: CampaignRequest | None = None) -> dict[str, object]:
+        return await self._pce.readiness(campaign)
 
     async def create(self, campaign: CampaignRequest, *, idempotency_key: str) -> dict[str, object]:
         return await self._pce.create_campaign(campaign, idempotency_key=idempotency_key)
