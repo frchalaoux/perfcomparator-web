@@ -16,9 +16,13 @@ from perfcomparatorweb import __version__
 from perfcomparatorweb.core.config import Settings
 from perfcomparatorweb.http_client.pce_client import PCEClient
 from perfcomparatorweb.web.repositories.pce_repository import PCERepository
+from perfcomparatorweb.web.services.campaign_service import CampaignService
+from perfcomparatorweb.web.services.machine_service import MachineService
 from perfcomparatorweb.web.services.read_only_service import ReadOnlyService
+from perfcomparatorweb.web.services.report_service import ReportService
 from perfcomparatorweb.web.services.status_service import StatusService
 from perfcomparatorweb.webapps.base import router
+from perfcomparatorweb.webapps.campaigns import router as campaigns_router
 
 PACKAGE_DIR = Path(__file__).parent
 
@@ -33,6 +37,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         pce_repository = PCERepository(client)
         app.state.status_service = StatusService(pce_repository)
         app.state.read_only_service = ReadOnlyService(pce_repository)
+        app.state.machine_service = MachineService(pce_repository)
+        app.state.report_service = ReportService(pce_repository)
+        app.state.campaign_service = CampaignService(pce_repository)
         try:
             yield
         finally:
@@ -44,6 +51,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.templates = Jinja2Templates(directory=str(PACKAGE_DIR / "templates"))
     app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static")
     app.include_router(router)
+    app.include_router(campaigns_router)
 
     @app.middleware("http")
     async def check_origin(request: Request, call_next):

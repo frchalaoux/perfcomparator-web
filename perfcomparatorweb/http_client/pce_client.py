@@ -31,9 +31,13 @@ class PCEClient:
         path: str,
         response_model: type[ResponseModel],
         *,
-        params: dict[str, int] | None = None,
+        params: dict[str, int | str] | None = None,
+        timeout: httpx.Timeout | None = None,
     ) -> dict[str, object]:
-        response = await self._client.get(path, params=params)
+        if timeout is None:
+            response = await self._client.get(path, params=params)
+        else:
+            response = await self._client.get(path, params=params, timeout=timeout)
         response.raise_for_status()
         try:
             payload = response_model.model_validate(response.json())
@@ -41,11 +45,78 @@ class PCEClient:
             raise PCEContractError(f"Réponse PCE incompatible pour {path}.") from error
         return payload.model_dump(mode="json")
 
+    async def _post(
+        self,
+        path: str,
+        response_model: type[ResponseModel],
+        *,
+        payload: dict[str, object] | None = None,
+        headers: dict[str, str] | None = None,
+        timeout: httpx.Timeout | None = None,
+    ) -> dict[str, object]:
+        if payload is None:
+            if timeout is None:
+                response = await self._client.post(path, headers=headers)
+            else:
+                response = await self._client.post(path, headers=headers, timeout=timeout)
+        elif timeout is None:
+            response = await self._client.post(path, json=payload, headers=headers)
+        else:
+            response = await self._client.post(
+                path,
+                json=payload,
+                headers=headers,
+                timeout=timeout,
+            )
+        response.raise_for_status()
+        try:
+            parsed = response_model.model_validate(response.json())
+        except (ValidationError, TypeError, ValueError) as error:
+            raise PCEContractError(f"Réponse PCE incompatible pour {path}.") from error
+        return parsed.model_dump(mode="json")
+
+    async def _patch(
+        self,
+        path: str,
+        response_model: type[ResponseModel],
+        *,
+        payload: dict[str, object],
+        timeout: httpx.Timeout | None = None,
+    ) -> dict[str, object]:
+        if timeout is None:
+            response = await self._client.patch(path, json=payload)
+        else:
+            response = await self._client.patch(path, json=payload, timeout=timeout)
+        response.raise_for_status()
+        try:
+            parsed = response_model.model_validate(response.json())
+        except (ValidationError, TypeError, ValueError) as error:
+            raise PCEContractError(f"Réponse PCE incompatible pour {path}.") from error
+        return parsed.model_dump(mode="json")
+
     async def health(self) -> dict[str, object]:
         return await self._get("/api/v1/health", schemas.HealthResponse)
 
     async def system(self) -> dict[str, object]:
-        return await self._get("/api/v1/system", schemas.SystemEnvelope)
+        return await self._get(
+            "/api/v1/system",
+            schemas.SystemEnvelope,
+            timeout=httpx.Timeout(60.0, connect=1.0),
+        )
+
+    async def update_machine_metadata(
+        self,
+        *,
+        model: str,
+        model_year: int | None,
+        product_sku: str | None,
+    ) -> dict[str, object]:
+        return await self._patch(
+            "/api/v1/system/machine",
+            schemas.SystemEnvelope,
+            payload={"model": model, "model_year": model_year, "product_sku": product_sku},
+            timeout=httpx.Timeout(60.0, connect=1.0),
+        )
 
     async def benchmarks(self) -> dict[str, object]:
         return await self._get("/api/v1/benchmarks", schemas.BenchmarkCatalog)
@@ -54,16 +125,129 @@ class PCEClient:
         path = f"/api/v1/benchmarks/{quote(benchmark_id, safe='')}"
         return await self._get(path, schemas.BenchmarkDetail)
 
-    async def reports(self, *, offset: int = 0, limit: int = 20) -> dict[str, object]:
+    async def reports(
+        self,
+        *,
+        offset: int = 0,
+        limit: int = 20,
+        q: str = "",
+    ) -> dict[str, object]:
         return await self._get(
             "/api/v1/reports",
             schemas.ReportPage,
-            params={"offset": offset, "limit": limit},
+            params={"offset": offset, "limit": limit, "q": q},
         )
 
     async def report(self, report_id: str) -> dict[str, object]:
         path = f"/api/v1/reports/{quote(report_id, safe='')}"
         return await self._get(path, schemas.ReportDetail)
+
+    async def update_report_machine(
+        self,
+        report_id: str,
+        *,
+        model: str,
+        model_year: int | None,
+        product_sku: str | None,
+    ) -> dict[str, object]:
+        path = f"/api/v1/reports/{quote(report_id, safe='')}/machine"
+        return await self._patch(
+            path,
+            schemas.ReportMachineMetadataUpdate,
+            payload={"model": model, "model_year": model_year, "product_sku": product_sku},
+        )
+
+    async def compare_reports(
+        self,
+        report_ids: list[str],
+        *,
+        reference_report_id: str,
+    ) -> dict[str, object]:
+        return await self._post(
+            "/api/v1/reports/compare",
+            schemas.ReportComparison,
+            payload={
+                "report_ids": report_ids,
+                "reference_report_id": reference_report_id,
+            },
+        )
+
+    async def comparison_html(
+        self,
+        report_ids: list[str],
+        *,
+        reference_report_id: str,
+    ) -> str:
+        response = await self._client.post(
+            "/api/v1/comparisons/export",
+            json={
+                "report_ids": report_ids,
+                "reference_report_id": reference_report_id,
+            },
+        )
+        response.raise_for_status()
+        if "text/html" not in response.headers.get("content-type", ""):
+            raise PCEContractError("PCE a renvoyé un export de comparaison incompatible.")
+        return response.text
+
+    async def readiness(
+        self,
+        campaign: schemas.CampaignRequest | None = None,
+    ) -> dict[str, object]:
+        if campaign is None:
+            return await self._post("/api/v1/readiness", schemas.CampaignReadiness)
+        gpu_selected = any(
+            benchmark_id.startswith("gpu.") for benchmark_id in campaign.benchmark_ids
+        )
+        timeout = httpx.Timeout(60.0, connect=1.0) if gpu_selected else None
+        return await self._post(
+            "/api/v1/readiness",
+            schemas.CampaignReadiness,
+            payload=campaign.model_dump(mode="json"),
+            timeout=timeout,
+        )
+
+    async def create_campaign(
+        self,
+        campaign: schemas.CampaignRequest,
+        *,
+        idempotency_key: str,
+    ) -> dict[str, object]:
+        return await self._post(
+            "/api/v1/runs",
+            schemas.CampaignSubmission,
+            payload=campaign.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key},
+        )
+
+    async def campaign(self, task_id: str) -> dict[str, object]:
+        path = f"/api/v1/jobs/{quote(task_id, safe='')}"
+        return await self._get(path, schemas.CampaignTask)
+
+    async def open_campaign_events(
+        self,
+        task_id: str,
+        *,
+        last_event_id: str | None = None,
+    ) -> httpx.Response:
+        path = f"/api/v1/jobs/{quote(task_id, safe='')}/events"
+        headers = {"Last-Event-ID": last_event_id} if last_event_id is not None else None
+        request = self._client.build_request(
+            "GET",
+            path,
+            headers=headers,
+            timeout=httpx.Timeout(30.0, connect=1.0),
+        )
+        response = await self._client.send(request, stream=True)
+        try:
+            response.raise_for_status()
+            content_type = response.headers.get("content-type", "").split(";", 1)[0]
+            if content_type.strip().lower() != "text/event-stream":
+                raise PCEContractError("PCE n’a pas renvoyé un flux d’événements.")
+        except BaseException:
+            await response.aclose()
+            raise
+        return response
 
     async def close(self) -> None:
         await self._client.aclose()

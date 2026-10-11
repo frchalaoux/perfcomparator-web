@@ -1,0 +1,55 @@
+{% if saved %}<p class="notice-success" role="status">Les propriétés de la machine ont été enregistrées. Elles seront utilisées dans les prochains rapports.</p>{% endif %}
+<section aria-labelledby="machine-title">
+  <h2 id="machine-title">Système</h2>
+  <dl class="details-grid">
+    <dt>Nom commercial</dt><dd>{{ inventory.system.product_name or "Inconnu" }}</dd>
+    <dt>Identifiant du modèle</dt><dd>{{ inventory.system.model }}</dd>
+    {% if inventory.system.model_year is not none %}<dt>Année du modèle</dt><dd>{{ inventory.system.model_year }}</dd>{% endif %}
+    {% if inventory.system.product_sku %}<dt>Référence produit</dt><dd>{{ inventory.system.product_sku }}</dd>{% endif %}
+    <dt>Fabricant</dt><dd>{{ inventory.system.manufacturer or "Inconnu" }}</dd>
+    <dt>Système</dt><dd>{{ inventory.system.system }} {{ inventory.system.release }} · {{ inventory.system.machine }}</dd>
+    <dt>Processeur</dt><dd>{{ inventory.system.processor }}</dd>
+    <dt>Cœurs</dt><dd>{{ inventory.system.physical_cpu_count or "Inconnu" }} physiques · {{ inventory.system.logical_cpu_count }} logiques</dd>
+    <dt>Mémoire</dt><dd>{% if inventory.system.memory_bytes %}{{ "%.1f"|format(inventory.system.memory_bytes / 1073741824) }} Gio{% else %}Inconnue{% endif %}</dd>
+    <dt>Python</dt><dd>{{ inventory.system.python_implementation }} {{ inventory.system.python_version }}</dd>
+  </dl>
+</section>
+<section aria-labelledby="edit-machine-title">
+  <h2 id="edit-machine-title">Propriétés modifiables</h2>
+  <p class="muted">Corrige les informations si la détection est incomplète. Elles seront conservées pour les prochaines campagnes ; les rapports déjà créés gardent leurs propres informations.</p>
+  {% if edit_error %}<p class="notice" role="alert">Vérifie le modèle, l’année et la référence produit.</p>{% endif %}
+  <form method="post" action="/machine/properties" class="metadata-form">
+    <label for="machine-model"><span>Identifiant du modèle (<code>model</code>)</span>
+      <input id="machine-model" name="model" type="text" maxlength="200" required value="{{ inventory.system.model }}">
+    </label>
+    <label for="machine-model-year"><span>Année du modèle (<code>model_year</code>)</span>
+      <input id="machine-model-year" name="model_year" type="number" min="1984" max="2100" step="1" value="{{ inventory.system.model_year or '' }}">
+    </label>
+    <label for="machine-product-sku"><span>Référence produit (<code>product_sku</code>)</span>
+      <input id="machine-product-sku" name="product_sku" type="text" maxlength="100" value="{{ inventory.system.product_sku or '' }}">
+    </label>
+    <button type="submit">Enregistrer les propriétés</button>
+    <div class="machine-save-wait" role="status" aria-live="polite" hidden>
+      <div class="wait-progress" role="progressbar" aria-label="Enregistrement des propriétés" aria-valuetext="En cours">
+        <span></span>
+      </div>
+      <p>Enregistrement et actualisation de la fiche machine en cours…</p>
+    </div>
+  </form>
+</section>
+<section aria-labelledby="gpu-title">
+  <h2 id="gpu-title">Adaptateurs WebGPU</h2>
+  {% if inventory.gpu_adapters %}
+    <ul class="item-list">
+      {% for adapter in inventory.gpu_adapters %}
+        <li><strong>{{ adapter.device }}</strong> · {{ adapter.adapter_type }} · {{ adapter.backend }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>Aucun adaptateur WebGPU compatible n’a été détecté.</p>
+  {% endif %}
+  {% if inventory.warnings %}
+    <ul class="notice-list">{% for warning in inventory.warnings %}<li>{{ warning }}</li>{% endfor %}</ul>
+  {% endif %}
+</section>
+<p class="notice">Pour préparer une mesure et vérifier les conditions avant son lancement, ouvrez <a href="/campaigns/new">Nouvelle campagne</a>.</p>

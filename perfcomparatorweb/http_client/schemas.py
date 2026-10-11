@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SystemResponse(BaseModel):
@@ -101,6 +101,8 @@ class ReportSystem(BaseModel):
     release: str
     machine: str
     model: str
+    model_year: int | None
+    product_sku: str | None = None
     manufacturer: str | None
     product_name: str | None
     processor: str
@@ -108,6 +110,8 @@ class ReportSystem(BaseModel):
     logical_cpu_count: int
     memory_bytes: int | None
     gpu_devices: list[str]
+    python_version: str
+    python_implementation: str
 
 
 class ReportResult(BaseModel):
@@ -141,7 +145,97 @@ class ReportDetail(ReportSummary):
     failures: list[ReportFailure]
 
 
+class ReportMachineMetadataUpdate(BaseModel):
+    report_id: str
+    model: str
+    model_year: int | None
+    product_sku: str | None = None
+
+
+class ComparisonMetric(BaseModel):
+    benchmark_id: str
+    name: str
+    group: str
+    value: float
+    unit: str
+    index: float
+    difference_percent: float
+    conclusion: str
+    uncertainty: str
+    spread_percent: float | None
+
+
+class ComparisonMachine(BaseModel):
+    report_id: str
+    label: str
+    recorded_at: datetime
+    profile: str
+    system: ReportSystem
+    overall_index: float
+    categories: dict[str, float]
+    scenarios: dict[str, float]
+    narrative: str
+    metrics: dict[str, ComparisonMetric]
+
+
+class ReportComparison(BaseModel):
+    baseline_report_id: str
+    baseline_label: str
+    common_benchmarks: list[str]
+    scenario_weights: dict[str, float]
+    warnings: list[str]
+    machines: list[ComparisonMachine]
+
+
 class HealthResponse(BaseModel):
     status: str
     component: str
     api_version: str
+
+
+class CampaignRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    profile: str = Field(min_length=1, max_length=32)
+    benchmark_ids: list[str] = Field(min_length=1, max_length=100)
+    repetitions: int = Field(ge=1, le=9)
+    label: str | None = Field(default=None, max_length=120)
+
+
+class ReadinessProcess(BaseModel):
+    name: str
+    cpu_percent: float
+    memory_percent: float
+
+
+class CampaignReadiness(BaseModel):
+    sample_seconds: float
+    cpu_percent: float
+    memory_available_percent: float
+    memory_available_bytes: int
+    swap_percent: float
+    active_processes: list[ReadinessProcess]
+    warnings: list[str]
+    suitable: bool
+
+
+class CampaignTaskSummary(BaseModel):
+    task_id: str
+    status: str
+    created_at: datetime
+    completed_benchmarks: int
+    total_benchmarks: int
+    report_id: str | None
+
+
+class CampaignTask(CampaignTaskSummary):
+    request: CampaignRequest
+    started_at: datetime | None
+    finished_at: datetime | None
+    current_benchmark: str | None
+    error_code: str | None
+
+
+class CampaignSubmission(BaseModel):
+    task: CampaignTask
+    created: bool
