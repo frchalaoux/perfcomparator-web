@@ -29,6 +29,12 @@
       <input id="machine-product-sku" name="product_sku" type="text" maxlength="100" value="{{ inventory.system.product_sku or '' }}">
     </label>
     <button type="submit">Enregistrer les propriétés</button>
+    <div class="machine-save-wait" role="status" aria-live="polite" hidden>
+      <div class="wait-progress" role="progressbar" aria-label="Enregistrement des propriétés" aria-valuetext="En cours">
+        <span></span>
+      </div>
+      <p>Enregistrement et actualisation de la fiche machine en cours…</p>
+    </div>
   </form>
 </section>
 <section aria-labelledby="gpu-title">

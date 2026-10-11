@@ -23,3 +23,17 @@ if (machineInventory) {
       machineInventory.setAttribute("aria-busy", "false");
     });
 }
+
+document.addEventListener("submit", (event) => {
+  const form = event.target;
+  if (!(form instanceof HTMLFormElement) || !form.matches(".metadata-form")) return;
+
+  const waitStatus = form.querySelector(".machine-save-wait");
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (waitStatus) waitStatus.hidden = false;
+  form.setAttribute("aria-busy", "true");
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = "Enregistrement en cours…";
+  }
+});

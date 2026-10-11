@@ -6,6 +6,9 @@
   <div id="machine-inventory" aria-live="polite" aria-busy="true">
     <section class="machine-loading" role="status">
       <h2>Chargement de l’inventaire</h2>
+      <div class="wait-progress" role="progressbar" aria-label="Chargement des informations de la machine" aria-valuetext="En cours">
+        <span></span>
+      </div>
       {% if windows %}
         <p>Le premier chargement peut prendre une trentaine de secondes sous Windows. Les visites suivantes sont plus rapides grâce au cache ; une modification des propriétés relance l’inventaire.</p>
       {% else %}
@@ -13,5 +16,5 @@
       {% endif %}
     </section>
   </div>
-  <script defer src="{{ url_for('static', path='machine.js') }}?v=1"></script>
+  <script defer src="{{ url_for('static', path='machine.js') }}?v=2"></script>
 {% endblock %}

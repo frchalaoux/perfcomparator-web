@@ -51,6 +51,14 @@ section, .card {
 .machine-loading { border-left: 4px solid #0759a5; background: #edf5fc; }
 .machine-loading h2 { margin-bottom: .4rem; }
 .machine-loading p { margin-bottom: 0; }
+.wait-progress { height: .7rem; margin: .8rem 0; overflow: hidden; border-radius: 1rem; background: #d9e5f0; }
+.wait-progress > span { display: block; width: 35%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #0759a5, #4d98d5); animation: wait-progress 1.4s ease-in-out infinite alternate; }
+@keyframes wait-progress { from { transform: translateX(-100%); } to { transform: translateX(285%); } }
+.machine-save-wait { color: #435266; }
+.machine-save-wait p { margin: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .wait-progress > span { width: 100%; animation: none; opacity: .55; }
+}
 
 .details-grid { display: grid; grid-template-columns: minmax(8rem, 12rem) minmax(0, 1fr); gap: .55rem 1rem; margin: 0; }
 .details-grid dt { color: #526174; font-weight: 650; }
