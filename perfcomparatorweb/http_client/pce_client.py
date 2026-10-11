@@ -32,8 +32,12 @@ class PCEClient:
         response_model: type[ResponseModel],
         *,
         params: dict[str, int | str] | None = None,
+        timeout: httpx.Timeout | None = None,
     ) -> dict[str, object]:
-        response = await self._client.get(path, params=params)
+        if timeout is None:
+            response = await self._client.get(path, params=params)
+        else:
+            response = await self._client.get(path, params=params, timeout=timeout)
         response.raise_for_status()
         try:
             payload = response_model.model_validate(response.json())
@@ -66,8 +70,12 @@ class PCEClient:
         response_model: type[ResponseModel],
         *,
         payload: dict[str, object],
+        timeout: httpx.Timeout | None = None,
     ) -> dict[str, object]:
-        response = await self._client.patch(path, json=payload)
+        if timeout is None:
+            response = await self._client.patch(path, json=payload)
+        else:
+            response = await self._client.patch(path, json=payload, timeout=timeout)
         response.raise_for_status()
         try:
             parsed = response_model.model_validate(response.json())
@@ -79,7 +87,11 @@ class PCEClient:
         return await self._get("/api/v1/health", schemas.HealthResponse)
 
     async def system(self) -> dict[str, object]:
-        return await self._get("/api/v1/system", schemas.SystemEnvelope)
+        return await self._get(
+            "/api/v1/system",
+            schemas.SystemEnvelope,
+            timeout=httpx.Timeout(60.0, connect=1.0),
+        )
 
     async def update_machine_metadata(
         self,
@@ -92,6 +104,7 @@ class PCEClient:
             "/api/v1/system/machine",
             schemas.SystemEnvelope,
             payload={"model": model, "model_year": model_year, "product_sku": product_sku},
+            timeout=httpx.Timeout(60.0, connect=1.0),
         )
 
     async def benchmarks(self) -> dict[str, object]:
