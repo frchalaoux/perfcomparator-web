@@ -23,7 +23,9 @@ def test_home_page_shows_engine_unavailable_without_connection() -> None:
     settings = Settings(engine_url="http://127.0.0.1:1")
     with TestClient(create_app(settings), base_url="http://127.0.0.1") as client:
         response = client.get("/")
+        inventory_response = client.get("/machine/inventory")
 
     assert response.status_code == 200
-    assert "Moteur PCE" in response.text
-    assert "unavailable" in response.text
+    assert "Chargement de l’inventaire" in response.text
+    assert inventory_response.status_code == 503
+    assert "Moteur PCE" in inventory_response.text

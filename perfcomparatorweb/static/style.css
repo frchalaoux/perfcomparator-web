@@ -48,6 +48,10 @@ section, .card {
   box-shadow: 0 2px 8px rgb(20 44 71 / 4%);
 }
 
+.machine-loading { border-left: 4px solid #0759a5; background: #edf5fc; }
+.machine-loading h2 { margin-bottom: .4rem; }
+.machine-loading p { margin-bottom: 0; }
+
 .details-grid { display: grid; grid-template-columns: minmax(8rem, 12rem) minmax(0, 1fr); gap: .55rem 1rem; margin: 0; }
 .details-grid dt { color: #526174; font-weight: 650; }
 .details-grid dd { margin: 0; overflow-wrap: anywhere; }

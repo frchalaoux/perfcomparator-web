@@ -1,0 +1,10 @@
+<h2>État des services</h2>
+<section aria-labelledby="services-title">
+  <h3 id="services-title">Disponibilité</h3>
+  <dl class="details-grid">
+    <dt>Interface Web</dt><dd>{{ status.web }}</dd>
+    <dt>Moteur PCE</dt><dd>{{ status.engine }}</dd>
+  </dl>
+  <p role="alert">{{ status.detail }}</p>
+  <p><a href="/">Réessayer</a></p>
+</section>

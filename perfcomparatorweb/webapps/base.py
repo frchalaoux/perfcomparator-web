@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import platform
 from typing import Annotated
 from urllib.parse import parse_qs
 
@@ -58,6 +59,23 @@ async def home(
     saved: int = Query(default=0, ge=0, le=1),
     edit_error: int = Query(default=0, ge=0, le=1),
 ) -> HTMLResponse:
+    return request.app.state.templates.TemplateResponse(
+        request,
+        "index.html",
+        {
+            "windows": platform.system() == "Windows",
+            "saved": bool(saved),
+            "edit_error": bool(edit_error),
+        },
+    )
+
+
+@router.get("/machine/inventory", response_class=HTMLResponse, name="machine_inventory")
+async def machine_inventory(
+    request: Request,
+    saved: int = Query(default=0, ge=0, le=1),
+    edit_error: int = Query(default=0, ge=0, le=1),
+) -> HTMLResponse:
     try:
         inventory = await request.app.state.read_only_service.system()
     except httpx.RequestError:
@@ -68,14 +86,28 @@ async def home(
         }
         return request.app.state.templates.TemplateResponse(
             request,
-            "index.html",
-            {"inventory": None, "status": status},
+            "machine_status.html",
+            {"status": status},
+            status_code=503,
         )
     except httpx.HTTPError as error:
-        return _error_page(request, error)
+        status_code = 502 if isinstance(error, PCEContractError) else 503
+        if isinstance(error, PCEContractError):
+            message = (
+                "PCE a renvoyé un format incompatible. Vérifiez que PCE et PCWEB sont à jour, "
+                "puis relancez les serveurs."
+            )
+        else:
+            message = "PCE est indisponible. Vérifiez que le moteur est démarré, puis réessayez."
+        return request.app.state.templates.TemplateResponse(
+            request,
+            "machine_status.html",
+            {"status": {"web": "available", "engine": "unavailable", "detail": message}},
+            status_code=status_code,
+        )
     return request.app.state.templates.TemplateResponse(
         request,
-        "index.html",
+        "machine_inventory.html",
         {"inventory": inventory, "saved": bool(saved), "edit_error": bool(edit_error)},
     )
 
