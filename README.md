@@ -6,9 +6,9 @@ locale. Elle ne requiert ni compte ni serveur distant.
 
 ## Version et disponibilité
 
-Le paquet Python s’appelle `perfcomparatorweb`. La préparation locale vise la
-version stable `0.1.1`, qui n’est pas encore publiée et n’est donc pas encore
-installable depuis une release. La dernière version embarquée dans les
+Le paquet Python s’appelle `perfcomparatorweb`. La version stable en préparation
+est `0.1.1`; elle n’est pas encore publiée et n’est donc pas encore installable
+depuis une release. La dernière version embarquée dans les
 installateurs de l’application complète est `0.1.1.dev0` avec PCE `v0.5.1`.
 La [liste de tous les tags](https://github.com/frchalaoux/perfcomparator-web/tags)
 permet de retrouver les versions effectivement taguées. Les installateurs de
