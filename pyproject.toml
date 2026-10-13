@@ -1,6 +1,6 @@
 [project]
 name = "perfcomparatorweb"
-version = "0.1.1.dev0"
+version = "0.1.1"
 description = "Interface Web locale de PerfComparator"
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
