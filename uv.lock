@@ -231,7 +231,7 @@ wheels = [
 
 [[package]]
 name = "perfcomparatorweb"
-version = "0.1.1.dev0"
+version = "0.1.1"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
